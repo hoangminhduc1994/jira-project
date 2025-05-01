@@ -310,6 +310,9 @@ const app = new Hono()
             return c.json({error: "All tasks must belong to the same workspace"})
         }
         const workspaceId = workspaceIds.values().next().value;
+        if (!workspaceId) {
+            return c.json({error: "WorkspaceID is required"}, 400)
+        };
         const member = await getMember({
             databases,
             workspaceId,
