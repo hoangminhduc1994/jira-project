@@ -3,6 +3,7 @@ import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-p
 import React, { useCallback, useEffect, useState } from "react";
 import { KanbanColumnHeader } from "./kanban-column-header";
 import { KanbanCard } from "./kanban-card";
+import { handleDragEnd } from "./handle-drag-end";
 
 const boards: TaskStatus[] = [
     TaskStatus.BACKLOG,
@@ -58,75 +59,12 @@ export const DataKanban = ({ data, onChange }: DataKanbanProps) => {
         setTasks(newTasks);
     }, [data]);
 
-    const onDragEnd = useCallback((result: DropResult) => {
-        if (!result.destination) return;
-        const {source, destination} = result;
-        const sourceStatus = source.droppableId as TaskStatus;
-        const destStatus = destination.droppableId as TaskStatus;
-
-        let updatesPayload: { $id: string; status: TaskStatus; position: number;}[] = [];
-        setTasks((prevTasks) => {
-            const newTasks = {...prevTasks};
-            // Safely remove the task from the source column
-            const sourceColumn = [...newTasks[sourceStatus]];
-            const [movedTask] = sourceColumn.splice(source.index, 1);
-            // if there is no moved task (should not happen, return previous task
-            if (!movedTask) {
-                console.error("No task found at the source index");
-                return prevTasks;
-            }
-            // Create a new task object with potentially updated status
-            const updatedMovedTask = sourceStatus !== destStatus
-            ? {...movedTask, status: destStatus}
-            : movedTask;
-
-            // Update the source column
-            newTasks[sourceStatus] = sourceColumn;
-            // Add the task to the destination column
-            const destColumn = [...newTasks[destStatus]];
-            destColumn.splice(destination.index, 0, updatedMovedTask);
-            newTasks[destStatus] = destColumn;
-
-            // Prepare minimum update payloads
-            updatesPayload = [];
-            // Always update the moved task
-            updatesPayload.push({
-                $id: updatedMovedTask.$id,
-                status: destStatus,
-                position: Math.min((destination.index + 1) * 1000, 1_000_000)
-            });
-            // Update position for affected tasks in the destination column
-            newTasks[destStatus].forEach((task, index) => {
-                if (task && task.$id !== updatedMovedTask.$id) {
-                    const newPosition = Math.min((index + 1) * 1000, 1_000_000);
-                    if (Number(task.position) !== newPosition) {
-                        updatesPayload.push({
-                            $id: task.$id,
-                            status: destStatus,
-                            position: newPosition,
-                        });
-                    }
-                }
-            });
-            // If the task moved between columns, update positions in the source column
-            if (sourceStatus !== destStatus) {
-                newTasks[sourceStatus].forEach((task, index) => {
-                    if (task) {
-                        const newPosition = Math.min((index + 1) * 1000, 1_000_000);
-                        if (Number(task.position) !== newPosition) {
-                            updatesPayload.push({
-                                $id: task.$id,
-                                status: sourceStatus,
-                                position: newPosition,
-                            });
-                        }
-                    }
-                });
-            }
-            return newTasks;
-        });
-        onChange(updatesPayload);
-    }, [onChange]);
+    const onDragEnd = useCallback(
+        (result: DropResult) => {
+          handleDragEnd(result, setTasks, onChange);
+        },
+        [onChange]
+      );
 
     return (
         <DragDropContext onDragEnd={onDragEnd}>
